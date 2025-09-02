@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+
+  embedding-service:
+    image: ghcr.io/huggingface/text-embeddings-inference:1.0
+    container_name: embedding-service
+    environment:
+      - MODEL_ID=Qwen/Qwen3-Embedding-8B
+    ports:
+      - "8080:80"
+    volumes:
+      - hf_cache:/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  api:
+    build: ./backend
+    container_name: search-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - elasticsearch
+      - embedding-service
+    volumes:
+      - ./backend:/app
+
+volumes:
+  esdata:
+    driver: local
+  hf_cache:
+    driver: local
